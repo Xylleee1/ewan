@@ -1,0 +1,237 @@
+/* ===== Global Reset ===== */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    background: #f5f7fb;
+    color: #222;
+}
+
+/* ===== Layout Containers ===== */
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* ===== Top Navigation Bar ===== */
+.topnav {
+    background: #2d3e50;
+    color: #fff;
+    padding: 14px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.topnav .brand {
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 0.5px;
+}
+
+.topnav .nav-links a {
+    color: #fff;
+    margin-left: 16px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: opacity 0.2s, color 0.2s;
+}
+
+.topnav .nav-links a:hover {
+    opacity: 0.9;
+    color: #aad4ff;
+}
+
+/* ===== Main Container ===== */
+.main-container {
+    flex: 1;
+    padding: 25px 20px;
+    background: #f5f7fb;
+}
+
+/* ===== Login Box ===== */
+.login-box {
+    width: 380px;
+    margin: 100px auto;
+    background: #fff;
+    padding: 30px 28px;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+    text-align: center;
+}
+
+.login-box h2 {
+    color: #2d6cdf;
+    margin-bottom: 20px;
+    font-size: 22px;
+}
+
+.login-box input {
+    width: 90%;
+    padding: 11px;
+    margin: 10px 0;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: border-color 0.3s;
+}
+
+.login-box input:focus {
+    outline: none;
+    border-color: #2d6cdf;
+}
+
+button {
+    background: #2d6cdf;
+    border: none;
+    color: #fff;
+    padding: 11px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 15px;
+    transition: background 0.3s;
+}
+
+button:hover {
+    background: #1c54b2;
+}
+
+/* ===== Tables ===== */
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.05);
+}
+
+.table th {
+    background: #1976d2;
+    color: #fff;
+    text-align: left;
+    padding: 12px 14px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #eee;
+    font-size: 14px;
+    color: #333;
+}
+
+.table tr:hover td {
+    background: #f1f7ff;
+}
+
+/* ===== Cards ===== */
+.cards {
+    display: flex;
+    gap: 16px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+}
+
+.card {
+    background: #fff;
+    padding: 18px;
+    border-radius: 10px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+    flex: 1;
+    min-width: 260px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+}
+
+.card h3 {
+    color: #1976d2;
+    margin-bottom: 10px;
+}
+
+/* ===== Alerts & Info Boxes ===== */
+.info {
+    background: #e7f5ff;
+    padding: 10px 12px;
+    border-left: 5px solid #2d6cdf;
+    margin: 12px 0;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #15508f;
+}
+
+.alert {
+    background: #ffe7e7;
+    padding: 10px 12px;
+    color: #b71c1c;
+    margin-bottom: 12px;
+    border-left: 5px solid #f44336;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.hint {
+    font-size: 12px;
+    color: #666;
+    margin-top: 8px;
+}
+
+/* ===== Footer ===== */
+.footer {
+    margin-top: auto;
+    background: #2d3e50;
+    color: #fff;
+    padding: 14px;
+    text-align: center;
+    font-size: 14px;
+    border-top: 3px solid #1976d2;
+}
+/* Global background fix */
+html, body {
+  height: 100%;
+  min-height: 100%;
+  background-color: #f5f7fb !important;
+  overflow-x: hidden;
+}
+
+
+
+/* ===== Responsive Design ===== */
+@media (max-width: 768px) {
+    .topnav {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .cards {
+        flex-direction: column;
+    }
+
+    .login-box {
+        width: 90%;
+        margin: 60px auto;
+        padding: 25px;
+    }
+
+    .main-container {
+        padding: 15px;
+    }
+}
