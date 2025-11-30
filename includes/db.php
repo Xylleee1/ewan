@@ -5,17 +5,18 @@
  */
 
 // Database configuration
-$host = 'localhost';
-$username = 'root';
-$password = '';
-$database = 'csm_apparatus_system';
+define('DB_HOST', 'localhost');
+define('DB_USER', 'root');
+define('DB_PASS', '');
+define('DB_NAME', 'csm_apparatus_system');
 
 // Create secure connection
-$conn = mysqli_connect($host, $username, $password, $database);
+$conn = mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 
 // Check connection
 if (!$conn) {
-    die("Connection failed: " . mysqli_connect_error());
+    error_log("Database connection failed: " . mysqli_connect_error());
+    die("System temporarily unavailable. Please try again later.");
 }
 
 // Set charset to utf8mb4 for security
@@ -24,6 +25,12 @@ mysqli_set_charset($conn, 'utf8mb4');
 // Set timezone
 date_default_timezone_set('Asia/Manila');
 
+// Error reporting (disable in production)
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+ini_set('error_log', __DIR__ . '/../logs/php_errors.log');
+
 /**
  * Session Security & Timeout Management
  */
@@ -31,8 +38,9 @@ function init_secure_session() {
     if (session_status() === PHP_SESSION_NONE) {
         // Session security settings
         ini_set('session.cookie_httponly', 1);
-        ini_set('session.cookie_secure', 0); // Set to 1 if using HTTPS
+        ini_set('session.cookie_secure', isset($_SERVER['HTTPS']) ? 1 : 0);
         ini_set('session.use_strict_mode', 1);
+        ini_set('session.cookie_samesite', 'Strict');
         
         session_start();
         
@@ -55,7 +63,69 @@ function init_secure_session() {
             session_regenerate_id(true);
             $_SESSION['CREATED'] = time();
         }
+        
+        // Prevent session fixation
+        if (!isset($_SESSION['USER_AGENT'])) {
+            $_SESSION['USER_AGENT'] = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        } else if ($_SESSION['USER_AGENT'] !== ($_SERVER['HTTP_USER_AGENT'] ?? '')) {
+            session_unset();
+            session_destroy();
+            header('Location: index.php?security=1');
+            exit();
+        }
     }
+}
+
+/**
+ * Password hashing functions - FIXED VERSION
+ */
+function hash_password($password) {
+    return password_hash($password, PASSWORD_DEFAULT);
+}
+
+/**
+ * Verify password with automatic rehashing for legacy passwords
+ * Returns: ['valid' => bool, 'needs_rehash' => bool]
+ */
+function verify_password($password, $hash) {
+    // Check if hash is bcrypt (starts with $2y$ or $2a$ or $2b$)
+    if (preg_match('/^\$2[ayb]\$/', $hash)) {
+        return [
+            'valid' => password_verify($password, $hash),
+            'needs_rehash' => password_needs_rehash($hash, PASSWORD_DEFAULT)
+        ];
+    }
+    
+    // Check for legacy MD5 (32 character hex string)
+    if (strlen($hash) === 32 && ctype_xdigit($hash)) {
+        $is_valid = (md5($password) === $hash);
+        return [
+            'valid' => $is_valid,
+            'needs_rehash' => $is_valid // Always rehash MD5 passwords
+        ];
+    }
+    
+    // Check for plain text (legacy)
+    $is_valid = ($password === $hash);
+    return [
+        'valid' => $is_valid,
+        'needs_rehash' => $is_valid // Always rehash plain text passwords
+    ];
+}
+
+/**
+ * Rehash password if needed - call this after successful login
+ */
+function rehash_user_password($conn, $user_id, $plain_password) {
+    $user_id = intval($user_id);
+    $new_hash = hash_password($plain_password);
+    
+    $stmt = mysqli_prepare($conn, "UPDATE users SET password = ? WHERE user_id = ?");
+    mysqli_stmt_bind_param($stmt, 'si', $new_hash, $user_id);
+    $result = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+    
+    return $result;
 }
 
 /**
@@ -64,6 +134,7 @@ function init_secure_session() {
 function add_log($conn, $user_id, $action, $description = '') {
     $stmt = mysqli_prepare($conn, "INSERT INTO activity_logs (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)");
     $ip_address = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
+    $user_id = intval($user_id);
     mysqli_stmt_bind_param($stmt, 'isss', $user_id, $action, $description, $ip_address);
     $result = mysqli_stmt_execute($stmt);
     mysqli_stmt_close($stmt);
@@ -74,6 +145,7 @@ function add_log($conn, $user_id, $action, $description = '') {
  * Check apparatus availability (SECURE VERSION)
  */
 function check_apparatus_availability($conn, $apparatus_id, $quantity) {
+    $apparatus_id = intval($apparatus_id);
     $stmt = mysqli_prepare($conn, "SELECT name, quantity FROM apparatus WHERE apparatus_id = ?");
     mysqli_stmt_bind_param($stmt, 'i', $apparatus_id);
     mysqli_stmt_execute($stmt);
@@ -112,9 +184,9 @@ function calculate_late_penalty($due_date, $return_date, $penalty_per_day = 50.0
  */
 function get_user_stats($conn, $user_id, $role) {
     $stats = [];
+    $user_id = intval($user_id);
     
     if ($role === 'student') {
-        // Student statistics
         $stmt = mysqli_prepare($conn, "SELECT COUNT(*) as total FROM borrow_requests WHERE student_id = ?");
         mysqli_stmt_bind_param($stmt, 'i', $user_id);
         mysqli_stmt_execute($stmt);
@@ -134,7 +206,7 @@ function get_user_stats($conn, $user_id, $role) {
             FROM penalties p
             LEFT JOIN transactions t ON p.transaction_id = t.transaction_id
             LEFT JOIN borrow_requests br ON t.request_id = br.request_id
-            WHERE br.student_id = ?
+            WHERE br.student_id = ? AND p.status != 'paid'
         ");
         mysqli_stmt_bind_param($stmt, 'i', $user_id);
         mysqli_stmt_execute($stmt);
@@ -143,7 +215,6 @@ function get_user_stats($conn, $user_id, $role) {
         mysqli_stmt_close($stmt);
         
     } elseif ($role === 'faculty') {
-        // Faculty statistics
         $stmt = mysqli_prepare($conn, "SELECT COUNT(*) as total FROM borrow_requests WHERE faculty_id = ? AND status = 'pending'");
         mysqli_stmt_bind_param($stmt, 'i', $user_id);
         mysqli_stmt_execute($stmt);
@@ -159,14 +230,13 @@ function get_user_stats($conn, $user_id, $role) {
         mysqli_stmt_close($stmt);
         
     } elseif ($role === 'admin' || $role === 'assistant') {
-        // Admin/Assistant statistics
         $result = mysqli_query($conn, "SELECT COUNT(*) as total FROM apparatus");
         $stats['total_apparatus'] = mysqli_fetch_assoc($result)['total'];
         
         $result = mysqli_query($conn, "SELECT COUNT(*) as total FROM borrow_requests WHERE status = 'pending'");
         $stats['pending_requests'] = mysqli_fetch_assoc($result)['total'];
         
-        $result = mysqli_query($conn, "SELECT COALESCE(SUM(amount), 0) as total FROM penalties");
+        $result = mysqli_query($conn, "SELECT COALESCE(SUM(amount), 0) as total FROM penalties WHERE status != 'paid'");
         $stats['total_penalties'] = mysqli_fetch_assoc($result)['total'] ?? 0;
     }
     
@@ -188,6 +258,13 @@ function sanitize_input($data) {
 }
 
 /**
+ * Sanitize for SQL (prevent injection)
+ */
+function sanitize_sql($conn, $data) {
+    return mysqli_real_escape_string($conn, $data);
+}
+
+/**
  * Format date for display
  */
 function format_date($date, $format = 'M d, Y') {
@@ -199,7 +276,7 @@ function format_date($date, $format = 'M d, Y') {
  * Check if user has permission
  */
 function has_permission($user_role, $allowed_roles) {
-    return in_array($user_role, $allowed_roles);
+    return in_array($user_role, (array)$allowed_roles);
 }
 
 /**
@@ -217,36 +294,10 @@ function get_categories($conn) {
 }
 
 /**
- * Send system notification placeholder
- */
-function send_notification($conn, $user_id, $title, $message) {
-    // Get user email
-    $stmt = mysqli_prepare($conn, "SELECT email, full_name FROM users WHERE user_id = ?");
-    mysqli_stmt_bind_param($stmt, 'i', $user_id);
-    mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
-    $user = mysqli_fetch_assoc($result);
-    mysqli_stmt_close($stmt);
-    
-    if ($user && !empty($user['email'])) {
-        // Insert into notifications table
-        $stmt = mysqli_prepare($conn, "INSERT INTO notifications (recipient_email, recipient_name, subject, message) VALUES (?, ?, ?, ?)");
-        mysqli_stmt_bind_param($stmt, 'ssss', $user['email'], $user['full_name'], $title, $message);
-        mysqli_stmt_execute($stmt);
-        mysqli_stmt_close($stmt);
-        
-        // In production, integrate with email service (PHPMailer, SendGrid, etc.)
-        error_log("Notification to {$user['email']}: $title - $message");
-        return true;
-    }
-    
-    return false;
-}
-
-/**
  * Get recent activities (SECURE VERSION)
  */
 function get_recent_activities($conn, $limit = 10) {
+    $limit = intval($limit);
     $stmt = mysqli_prepare($conn, "
         SELECT l.*, u.full_name, u.role, u.email
         FROM activity_logs l
@@ -301,6 +352,7 @@ function generate_transaction_code() {
  * Get borrowing history for a student (SECURE VERSION)
  */
 function get_borrowing_history($conn, $student_id) {
+    $student_id = intval($student_id);
     $stmt = mysqli_prepare($conn, "
         SELECT br.*, a.name AS apparatus_name, a.category,
                COALESCE(f.full_name, f.username) AS faculty_name,
@@ -321,6 +373,7 @@ function get_borrowing_history($conn, $student_id) {
  * Check if student has pending penalties (SECURE VERSION)
  */
 function check_student_penalties($conn, $student_id) {
+    $student_id = intval($student_id);
     $stmt = mysqli_prepare($conn, "
         SELECT COALESCE(SUM(p.amount), 0) as total_penalties
         FROM penalties p
@@ -346,6 +399,8 @@ function check_student_penalties($conn, $student_id) {
  * Update apparatus quantity (SECURE VERSION)
  */
 function update_apparatus_quantity($conn, $apparatus_id, $quantity_change) {
+    $apparatus_id = intval($apparatus_id);
+    $quantity_change = intval($quantity_change);
     $stmt = mysqli_prepare($conn, "
         UPDATE apparatus 
         SET quantity = GREATEST(0, quantity + ?) 
@@ -361,6 +416,7 @@ function update_apparatus_quantity($conn, $apparatus_id, $quantity_change) {
  * Get low stock items
  */
 function get_low_stock_items($conn, $threshold = 5) {
+    $threshold = intval($threshold);
     $stmt = mysqli_prepare($conn, "
         SELECT apparatus_id, name, category, quantity
         FROM apparatus
@@ -376,6 +432,7 @@ function get_low_stock_items($conn, $threshold = 5) {
  * Archive old records
  */
 function archive_old_records($conn, $days_old = 365) {
+    $days_old = intval($days_old);
     $cutoff_date = date('Y-m-d', strtotime("-$days_old days"));
     
     $stmt = mysqli_prepare($conn, "
@@ -390,17 +447,6 @@ function archive_old_records($conn, $days_old = 365) {
     mysqli_stmt_close($stmt);
     
     return $affected;
-}
-
-/**
- * Password hashing functions
- */
-function hash_password($password) {
-    return password_hash($password, PASSWORD_DEFAULT);
-}
-
-function verify_password($password, $hash) {
-    return password_verify($password, $hash);
 }
 
 /**
@@ -436,6 +482,22 @@ function update_setting($conn, $key, $value) {
     return $result;
 }
 
+/**
+ * Generate CSRF token
+ */
+function generate_csrf_token() {
+    if (!isset($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+/**
+ * Verify CSRF token
+ */
+function verify_csrf_token($token) {
+    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+}
+
 // Initialize secure session
 init_secure_session();
-?>

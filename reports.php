@@ -793,137 +793,137 @@ body {
     </form>
 
     <!-- Statistics Cards -->
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-header">
-                <div class="stat-icon">
-                    <i class="bi bi-clipboard-data"></i>
-                </div>
-                <p class="stat-label">Total Requests</p>
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon">
+                <i class="bi bi-clipboard-data"></i>
             </div>
-            <p class="stat-value"><?= number_format($total_requests) ?></p>
+            <p class="stat-label">Total Requests</p>
         </div>
-
-        <div class="stat-card success">
-            <div class="stat-header">
-                <div class="stat-icon">
-                    <i class="bi bi-check-circle-fill"></i>
-                </div>
-                <p class="stat-label">Approved Requests</p>
-            </div>
-            <p class="stat-value"><?= number_format($approved_requests) ?></p>
-        </div>
-
-        <div class="stat-card warning">
-            <div class="stat-header">
-                <div class="stat-icon">
-                    <i class="bi bi-clock-fill"></i>
-                </div>
-                <p class="stat-label">Pending Requests</p>
-            </div>
-            <p class="stat-value"><?= number_format($pending_requests) ?></p>
-        </div>
-
-        <div class="stat-card danger">
-            <div class="stat-header">
-                <div class="stat-icon">
-                    <i class="bi bi-exclamation-triangle-fill"></i>
-                </div>
-                <p class="stat-label">Total Penalties</p>
-            </div>
-            <p class="stat-value">₱<?= number_format($total_penalties, 2) ?></p>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-header">
-                <div class="stat-icon">
-                    <i class="bi bi-box-seam"></i>
-                </div>
-                <p class="stat-label">Total Apparatus</p>
-            </div>
-            <p class="stat-value"><?= number_format($total_apparatus) ?></p>
-        </div>
-
-        <div class="stat-card danger">
-            <div class="stat-header">
-                <div class="stat-icon">
-                    <i class="bi bi-alarm-fill"></i>
-                </div>
-                <p class="stat-label">Overdue Items</p>
-            </div>
-            <p class="stat-value"><?= number_format($overdue_items) ?></p>
-        </div>
-
-        <div class="stat-card danger">
-            <div class="stat-header">
-                <div class="stat-icon">
-                    <i class="bi bi-x-circle-fill"></i>
-                </div>
-                <p class="stat-label">Rejected Requests</p>
-            </div>
-            <p class="stat-value"><?= number_format($rejected_requests) ?></p>
-        </div>
-
-        <div class="stat-card info">
-            <div class="stat-header">
-                <div class="stat-icon">
-                    <i class="bi bi-percent"></i>
-                </div>
-                <p class="stat-label">Approval Rate</p>
-            </div>
-            <p class="stat-value"><?= $approval_rate ?>%</p>
-        </div>
-
-        <div class="stat-card danger">
-            <div class="stat-header">
-                <div class="stat-icon">
-                    <i class="bi bi-cash-stack"></i>
-                </div>
-                <p class="stat-label">Unpaid Penalties</p>
-            </div>
-            <p class="stat-value">₱<?= number_format($unpaid_penalties, 2) ?></p>
-        </div>
-
-        <div class="stat-card success">
-            <div class="stat-header">
-                <div class="stat-icon">
-                    <i class="bi bi-check-circle-fill"></i>
-                </div>
-                <p class="stat-label">Available Apparatus</p>
-            </div>
-            <p class="stat-value"><?= number_format($available_apparatus) ?></p>
-        </div>
-
-        <div class="stat-card info">
-            <div class="stat-header">
-                <div class="stat-icon">
-                    <i class="bi bi-arrow-repeat"></i>
-                </div>
-                <p class="stat-label">Active Borrowings</p>
-            </div>
-            <p class="stat-value"><?= number_format($active_borrowings) ?></p>
-        </div>
-
-        <div class="stat-card warning">
-            <div class="stat-header">
-                <div class="stat-icon">
-                    <i class="bi bi-exclamation-triangle-fill"></i>
-                </div>
-                <p class="stat-label">Low Stock Items</p>
-            </div>
-            <p class="stat-value"><?= number_format($low_stock_count) ?></p>
-        </div>
-
-        <div class="stat-card success">
-            <div class="stat-header">
-                <div class="stat-icon">
-                    <i class="bi bi-check2-all"></i>
-                </div>
-                <p class="stat-label">Released/Returned</p>
-            </div>
-            <p class="stat-value"><?= number_format($released_returned) ?></p>
-        </div>
+        <p class="stat-value"><?= number_format($total_requests) ?></p>
     </div>
+
+    <div class="stat-card success">
+        <div class="stat-header">
+            <div class="stat-icon">
+                <i class="bi bi-check-circle-fill"></i>
+            </div>
+            <p class="stat-label">Approved Requests</p>
+        </div>
+        <p class="stat-value"><?= number_format($approved_requests) ?></p>
+    </div>
+
+    <div class="stat-card warning">
+        <div class="stat-header">
+            <div class="stat-icon">
+                <i class="bi bi-clock-fill"></i>
+            </div>
+            <p class="stat-label">Pending Requests</p>
+        </div>
+        <p class="stat-value"><?= number_format($pending_requests) ?></p>
+    </div>
+
+    <div class="stat-card danger">
+        <div class="stat-header">
+            <div class="stat-icon">
+                <i class="bi bi-x-circle-fill"></i>
+            </div>
+            <p class="stat-label">Rejected Requests</p>
+        </div>
+        <p class="stat-value"><?= number_format($rejected_requests) ?></p>
+    </div>
+
+    <div class="stat-card info">
+        <div class="stat-header">
+            <div class="stat-icon">
+                <i class="bi bi-percent"></i>
+            </div>
+            <p class="stat-label">Approval Rate</p>
+        </div>
+        <p class="stat-value"><?= $approval_rate ?>%</p>
+    </div>
+
+    <div class="stat-card danger">
+        <div class="stat-header">
+            <div class="stat-icon">
+                <i class="bi bi-cash-stack"></i>
+            </div>
+            <p class="stat-label">Unpaid Penalties</p>
+        </div>
+        <p class="stat-value">₱<?= number_format($unpaid_penalties, 2) ?></p>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon">
+                <i class="bi bi-box-seam"></i>
+            </div>
+            <p class="stat-label">Available Apparatus</p>
+        </div>
+        <p class="stat-value"><?= number_format($available_apparatus) ?></p>
+    </div>
+
+    <div class="stat-card info">
+        <div class="stat-header">
+            <div class="stat-icon">
+                <i class="bi bi-arrow-repeat"></i>
+            </div>
+            <p class="stat-label">Active Borrowings</p>
+        </div>
+        <p class="stat-value"><?= number_format($active_borrowings) ?></p>
+    </div>
+
+    <div class="stat-card danger">
+        <div class="stat-header">
+            <div class="stat-icon">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+            </div>
+            <p class="stat-label">Total Penalties</p>
+        </div>
+        <p class="stat-value">₱<?= number_format($total_penalties, 2) ?></p>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon">
+                <i class="bi bi-box-seam"></i>
+            </div>
+            <p class="stat-label">Total Apparatus</p>
+        </div>
+        <p class="stat-value"><?= number_format($total_apparatus) ?></p>
+    </div>
+
+    <div class="stat-card danger">
+        <div class="stat-header">
+            <div class="stat-icon">
+                <i class="bi bi-alarm-fill"></i>
+            </div>
+            <p class="stat-label">Overdue Items</p>
+        </div>
+        <p class="stat-value"><?= number_format($overdue_items) ?></p>
+    </div>
+
+    <div class="stat-card warning">
+        <div class="stat-header">
+            <div class="stat-icon">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+            </div>
+            <p class="stat-label">Low Stock Items</p>
+        </div>
+        <p class="stat-value"><?= number_format($low_stock_count) ?></p>
+    </div>
+
+    <div class="stat-card success">
+        <div class="stat-header">
+            <div class="stat-icon">
+                <i class="bi bi-check2-all"></i>
+            </div>
+            <p class="stat-label">Released/Returned</p>
+        </div>
+        <p class="stat-value"><?= number_format($released_returned) ?></p>
+    </div>
+</div>
 
     <!-- Charts Section -->
     <div class="charts-section">

@@ -1,486 +1,230 @@
 <?php
-// includes/notifications.php - Notification functions
+// includes/notifications.php - Complete Notification System with Email Support
 
-// Create notification for user
+/**
+ * Create notification for user
+ */
 function create_notification($user_id, $title, $message, $type = 'info', $related_id = null, $related_type = null) {
     global $conn;
-
+    
+    $user_id = intval($user_id);
     $stmt = mysqli_prepare($conn, "INSERT INTO user_notifications (user_id, title, message, type, related_id, related_type) VALUES (?, ?, ?, ?, ?, ?)");
     mysqli_stmt_bind_param($stmt, "isssis", $user_id, $title, $message, $type, $related_id, $related_type);
-    mysqli_stmt_execute($stmt);
-
-    return mysqli_stmt_insert_id($stmt);
+    $result = mysqli_stmt_execute($stmt);
+    $notification_id = mysqli_insert_id($conn);
+    mysqli_stmt_close($stmt);
+    
+    // Auto-send email if user has email configured
+    if ($result) {
+        $user_query = mysqli_query($conn, "SELECT email, full_name FROM users WHERE user_id = $user_id");
+        if ($user_data = mysqli_fetch_assoc($user_query)) {
+            if (!empty($user_data['email'])) {
+                send_email_notification($user_data['email'], $user_data['full_name'], $title, $message);
+            }
+        }
+    }
+    
+    return $notification_id;
 }
 
-// Get unread notification count for user
+/**
+ * Get unread notification count for user
+ */
 function get_unread_notification_count($user_id) {
     global $conn;
-
-    $result = mysqli_query($conn, "SELECT COUNT(*) as count FROM user_notifications WHERE user_id = $user_id AND is_read = 0");
+    
+    $user_id = intval($user_id);
+    $stmt = mysqli_prepare($conn, "SELECT COUNT(*) as count FROM user_notifications WHERE user_id = ? AND is_read = 0");
+    mysqli_stmt_bind_param($stmt, 'i', $user_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
     $row = mysqli_fetch_assoc($result);
+    mysqli_stmt_close($stmt);
+    
     return $row['count'];
 }
 
-// Get notifications for user
+/**
+ * Get notifications for user
+ */
 function get_user_notifications($user_id, $limit = 20) {
     global $conn;
-
-    $result = mysqli_query($conn, "
+    
+    $user_id = intval($user_id);
+    $limit = intval($limit);
+    
+    $stmt = mysqli_prepare($conn, "
         SELECT * FROM user_notifications
-        WHERE user_id = $user_id
+        WHERE user_id = ?
         ORDER BY created_at DESC
-        LIMIT $limit
+        LIMIT ?
     ");
-
+    mysqli_stmt_bind_param($stmt, 'ii', $user_id, $limit);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    
     $notifications = [];
     while ($row = mysqli_fetch_assoc($result)) {
         $notifications[] = $row;
     }
-
+    mysqli_stmt_close($stmt);
+    
     return $notifications;
 }
 
-// Mark notification as read
+/**
+ * Mark notification as read
+ */
 function mark_notification_read($notification_id, $user_id) {
     global $conn;
-
-    mysqli_query($conn, "UPDATE user_notifications SET is_read = 1 WHERE notification_id = $notification_id AND user_id = $user_id");
+    
+    $notification_id = intval($notification_id);
+    $user_id = intval($user_id);
+    
+    $stmt = mysqli_prepare($conn, "UPDATE user_notifications SET is_read = 1 WHERE notification_id = ? AND user_id = ?");
+    mysqli_stmt_bind_param($stmt, 'ii', $notification_id, $user_id);
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
 }
 
-// Mark all notifications as read for user
+/**
+ * Mark all notifications as read for user
+ */
 function mark_all_notifications_read($user_id) {
     global $conn;
-
-    mysqli_query($conn, "UPDATE user_notifications SET is_read = 1 WHERE user_id = $user_id AND is_read = 0");
+    
+    $user_id = intval($user_id);
+    $stmt = mysqli_prepare($conn, "UPDATE user_notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0");
+    mysqli_stmt_bind_param($stmt, 'i', $user_id);
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
 }
 
-// Send email notification using PHPMailer
+/**
+ * Send email notification using PHP mail() function
+ * For production, integrate with PHPMailer or SMTP service
+ */
 function send_email_notification($to_email, $to_name, $subject, $message, $from_name = 'CSM Laboratory System') {
-    // Check if PHPMailer is available
-    if (file_exists('phpmailer/PHPMailer.php')) {
-        require_once 'phpmailer/PHPMailer.php';
-        require_once 'phpmailer/SMTP.php';
-        require_once 'phpmailer/Exception.php';
-        
-        $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-        
-        try {
-            // SMTP Configuration - UPDATE THESE WITH YOUR SETTINGS
-            $mail->isSMTP();
-            $mail->Host       = 'smtp.gmail.com';  // Your SMTP server
-            $mail->SMTPAuth   = true;
-            $mail->Username   = 'your-email@gmail.com';  // Your email
-            $mail->Password   = 'your-app-password';     // Your app password
-            $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-            $mail->Port       = 587;
-            
-            // Recipients
-            $mail->setFrom('your-email@gmail.com', $from_name);
-            $mail->addAddress($to_email, $to_name);
-            
-            // Content
-            $mail->isHTML(true);
-            $mail->Subject = $subject;
-            $mail->Body    = "
-            <html>
-            <head>
-                <title>$subject</title>
-                <style>
-                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                    .header { background: #FF6600; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
-                    .content { background: #f9f9f9; padding: 20px; border-radius: 0 0 8px 8px; }
-                    .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
-                </style>
-            </head>
-            <body>
-                <div class='container'>
-                    <div class='header'>
-                        <h2>CSM Apparatus Borrowing System</h2>
-                    </div>
-                    <div class='content'>
-                        <p>Hello, $to_name!</p>
-                        $message
-                    </div>
-                    <div class='footer'>
-                        <p>This is an automated message from CSM Laboratory System. Please do not reply to this email.</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-            ";
-            
-            $mail->send();
-            return true;
-        } catch (Exception $e) {
-            error_log("Email Error: {$mail->ErrorInfo}");
-            return false;
-        }
-    } else {
-        // Fallback to PHP mail() function
-        $headers = "MIME-Version: 1.0" . "\r\n";
-        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headers .= "From: $from_name <noreply@csm.edu.ph>" . "\r\n";
+    // Email configuration - Update these for your SMTP server
+    $from_email = 'noreply@csm-lab.edu.ph';
+    
+    // Build HTML email
+    $html_message = build_email_template($to_name, $subject, $message);
+    
+    // Email headers
+    $headers = "MIME-Version: 1.0" . "\r\n";
+    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+    $headers .= "From: $from_name <$from_email>" . "\r\n";
+    $headers .= "Reply-To: $from_email" . "\r\n";
+    $headers .= "X-Mailer: PHP/" . phpversion();
+    
+    // Send email
+    $success = @mail($to_email, $subject, $html_message, $headers);
+    
+    // Log email attempt
+    if (!$success) {
+        error_log("Failed to send email to: $to_email - Subject: $subject");
+    }
+    
+    return $success;
+}
 
-        $html_message = "
-        <html>
-        <head>
-            <title>$subject</title>
-            <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background: #FF6600; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
-                .content { background: #f9f9f9; padding: 20px; border-radius: 0 0 8px 8px; }
-                .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
-            </style>
-        </head>
-        <body>
-            <div class='container'>
-                <div class='header'>
-                    <h2>CSM Apparatus Borrowing System</h2>
-                </div>
-                <div class='content'>
-                    <p>Hello, $to_name!</p>
+/**
+ * Build email template
+ */
+function build_email_template($to_name, $subject, $message) {
+    return "
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset='UTF-8'>
+        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+        <title>$subject</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background: #f4f4f4; }
+            .container { max-width: 600px; margin: 20px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+            .header { background: linear-gradient(135deg, #FF6F00, #FFA040); color: white; padding: 30px 20px; text-align: center; }
+            .header h1 { margin: 0; font-size: 24px; }
+            .content { padding: 30px 20px; }
+            .message { background: #f9f9f9; padding: 20px; border-left: 4px solid #FF6F00; border-radius: 4px; margin: 20px 0; }
+            .footer { background: #f4f4f4; padding: 20px; text-align: center; font-size: 12px; color: #666; }
+            .button { display: inline-block; background: #FF6F00; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+        </style>
+    </head>
+    <body>
+        <div class='container'>
+            <div class='header'>
+                <h1>🔬 CSM Apparatus System</h1>
+            </div>
+            <div class='content'>
+                <p>Dear <strong>" . htmlspecialchars($to_name) . "</strong>,</p>
+                <div class='message'>
                     $message
                 </div>
-                <div class='footer'>
-                    <p>This is an automated message from CSM Laboratory System. Please do not reply to this email.</p>
-                </div>
+                <p>If you have any questions, please contact the laboratory administration.</p>
             </div>
-        </body>
-        </html>
-        ";
-
-        return mail($to_email, $subject, $html_message, $headers);
-    }
+            <div class='footer'>
+                <p>This is an automated message from CSM Laboratory System.</p>
+                <p>Please do not reply to this email.</p>
+                <p>&copy; " . date('Y') . " College of Science and Mathematics</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    ";
 }
 
-// Generate notification on borrow request submission
-function notify_borrow_request_submitted($request_id, $email_recipients = ['student', 'faculty', 'admin']) {
+/**
+ * Generate notification on borrow request submission
+ */
+function notify_borrow_request_submitted($request_id) {
     global $conn;
-
+    
+    $request_id = intval($request_id);
+    
     $request = mysqli_fetch_assoc(mysqli_query($conn, "
-        SELECT br.*, u.full_name, u.email, f.full_name as faculty_name, f.email as faculty_email, a.name as apparatus_name
+        SELECT br.*, u.full_name, u.email, f.full_name as faculty_name, a.name as apparatus_name
         FROM borrow_requests br
         JOIN users u ON br.student_id = u.user_id
         LEFT JOIN users f ON br.faculty_id = f.user_id
         JOIN apparatus a ON br.apparatus_id = a.apparatus_id
         WHERE br.request_id = $request_id
     "));
-
-    if ($request) {
-        // Notify faculty if assigned
-        if ($request['faculty_id']) {
-            create_notification(
-                $request['faculty_id'],
-                'New Borrow Request',
-                "A new borrow request has been submitted by {$request['full_name']} for {$request['apparatus_name']} (Qty: {$request['quantity']}).",
-                'info',
-                $request_id,
-                'borrow_request'
-            );
-
-            // Send email to faculty if enabled
-            if (in_array('faculty', $email_recipients) && !empty($request['faculty_email'])) {
-                $email_message = "
-                    <p>Dear {$request['faculty_name']},</p>
-                    <p>A new borrow request has been submitted and requires your attention.</p>
-                    <p><strong>Request Details:</strong></p>
-                    <ul>
-                        <li>Student: {$request['full_name']}</li>
-                        <li>Apparatus: {$request['apparatus_name']}</li>
-                        <li>Quantity: {$request['quantity']}</li>
-                        <li>Date Needed: " . date('M d, Y', strtotime($request['date_needed'])) . "</li>
-                        <li>Time: {$request['time_from']} - {$request['time_to']}</li>
-                        <li>Subject: {$request['subject']}</li>
-                        <li>Room: {$request['room']}</li>
-                    </ul>
-                    <p>Please log in to the system to review this request.</p>
-                    <p>Thank you,<br>CSM Laboratory System</p>
-                ";
-                send_email_notification($request['faculty_email'], $request['faculty_name'], 'New Borrow Request', $email_message);
-            }
-        }
-
-        // Notify admin/assistant
-        $admins = mysqli_query($conn, "SELECT user_id, full_name, email FROM users WHERE role IN ('admin', 'assistant')");
+    
+    if ($request && $request['faculty_id']) {
+        // Notify faculty
+        create_notification(
+            $request['faculty_id'],
+            'New Borrow Request',
+            "{$request['full_name']} has requested {$request['apparatus_name']} (Qty: {$request['quantity']}) for {$request['subject']}.",
+            'info',
+            $request_id,
+            'borrow_request'
+        );
+        
+        // Notify admins
+        $admins = mysqli_query($conn, "SELECT user_id FROM users WHERE role IN ('admin', 'assistant')");
         while ($admin = mysqli_fetch_assoc($admins)) {
             create_notification(
                 $admin['user_id'],
                 'New Borrow Request',
-                "A new borrow request has been submitted by {$request['full_name']} for {$request['apparatus_name']} (Qty: {$request['quantity']}).",
+                "New request from {$request['full_name']} for {$request['apparatus_name']}.",
                 'info',
                 $request_id,
                 'borrow_request'
             );
-
-            // Send email to admin if enabled
-            if (in_array('admin', $email_recipients) && !empty($admin['email'])) {
-                $email_message = "
-                    <p>Dear {$admin['full_name']},</p>
-                    <p>A new borrow request has been submitted.</p>
-                    <p><strong>Request Details:</strong></p>
-                    <ul>
-                        <li>Student: {$request['full_name']}</li>
-                        <li>Apparatus: {$request['apparatus_name']}</li>
-                        <li>Quantity: {$request['quantity']}</li>
-                        <li>Date Needed: " . date('M d, Y', strtotime($request['date_needed'])) . "</li>
-                        <li>Time: {$request['time_from']} - {$request['time_to']}</li>
-                        <li>Subject: {$request['subject']}</li>
-                        <li>Room: {$request['room']}</li>
-                    </ul>
-                    <p>Please log in to the system to review this request.</p>
-                    <p>Thank you,<br>CSM Laboratory System</p>
-                ";
-                send_email_notification($admin['email'], $admin['full_name'], 'New Borrow Request', $email_message);
-            }
-        }
-
-        // Send email to student if enabled
-        if (in_array('student', $email_recipients) && !empty($request['email'])) {
-            $email_message = "
-                <p>Dear {$request['full_name']},</p>
-                <p>Your borrow request for <strong>{$request['apparatus_name']}</strong> has been successfully submitted.</p>
-                <p><strong>Request Details:</strong></p>
-                <ul>
-                    <li>Quantity: {$request['quantity']}</li>
-                    <li>Date Needed: " . date('M d, Y', strtotime($request['date_needed'])) . "</li>
-                    <li>Time: {$request['time_from']} - {$request['time_to']}</li>
-                    <li>Subject: {$request['subject']}</li>
-                    <li>Room: {$request['room']}</li>
-                </ul>
-                <p>You will be notified once your request is reviewed. Please check your account regularly for updates.</p>
-                <p>Thank you,<br>CSM Laboratory Staff</p>
-            ";
-            send_email_notification($request['email'], $request['full_name'], 'Borrow Request Submitted', $email_message);
         }
     }
 }
 
-// Generate notification on request approval
-function notify_request_approved($request_id, $email_recipients = ['student', 'faculty', 'admin']) {
+/**
+ * Generate notification on request approval
+ */
+function notify_request_approved($request_id) {
     global $conn;
-
-    $request = mysqli_fetch_assoc(mysqli_query($conn, "
-        SELECT br.*, u.full_name, u.email, f.full_name as faculty_name, f.email as faculty_email, a.name as apparatus_name
-        FROM borrow_requests br
-        JOIN users u ON br.student_id = u.user_id
-        LEFT JOIN users f ON br.faculty_id = f.user_id
-        JOIN apparatus a ON br.apparatus_id = a.apparatus_id
-        WHERE br.request_id = $request_id
-    "));
-
-    if ($request) {
-        // Notify student
-        create_notification(
-            $request['student_id'],
-            'Request Approved',
-            "Your borrow request for {$request['apparatus_name']} has been approved. Please proceed to the laboratory to claim your items.",
-            'success',
-            $request_id,
-            'borrow_request'
-        );
-
-        // Send email to student if enabled
-        if (in_array('student', $email_recipients) && !empty($request['email'])) {
-            $email_message = "
-                <p>Dear {$request['full_name']},</p>
-                <p>Great news! Your borrow request for <strong>{$request['apparatus_name']}</strong> has been <strong>approved</strong>.</p>
-                <p><strong>Request Details:</strong></p>
-                <ul>
-                    <li>Quantity: {$request['quantity']}</li>
-                    <li>Date Needed: " . date('M d, Y', strtotime($request['date_needed'])) . "</li>
-                    <li>Time: {$request['time_from']} - {$request['time_to']}</li>
-                </ul>
-                <p>Please proceed to the laboratory during your scheduled time to claim your borrowed items. Make sure to bring your student ID.</p>
-                <p>Thank you,<br>CSM Laboratory Staff</p>
-            ";
-            send_email_notification($request['email'], $request['full_name'], 'Borrow Request Approved', $email_message);
-        }
-
-        // Notify faculty if assigned
-        if ($request['faculty_id']) {
-            create_notification(
-                $request['faculty_id'],
-                'Request Approved',
-                "The borrow request for {$request['apparatus_name']} submitted by {$request['full_name']} has been approved.",
-                'success',
-                $request_id,
-                'borrow_request'
-            );
-
-            // Send email to faculty if enabled
-            if (in_array('faculty', $email_recipients) && !empty($request['faculty_email'])) {
-                $email_message = "
-                    <p>Dear {$request['faculty_name']},</p>
-                    <p>The borrow request for <strong>{$request['apparatus_name']}</strong> submitted by {$request['full_name']} has been approved.</p>
-                    <p>The student will be notified to claim their items.</p>
-                    <p>Thank you,<br>CSM Laboratory Staff</p>
-                ";
-                send_email_notification($request['faculty_email'], $request['faculty_name'], 'Borrow Request Approved', $email_message);
-            }
-        }
-
-        // Notify all faculty (excluding assigned faculty to avoid duplicate)
-        $exclude_id = $request['faculty_id'] ? $request['faculty_id'] : 0;
-        $faculties = mysqli_query($conn, "SELECT user_id, full_name, email FROM users WHERE role = 'faculty' AND user_id != $exclude_id");
-        while ($faculty = mysqli_fetch_assoc($faculties)) {
-            create_notification(
-                $faculty['user_id'],
-                'Request Approved',
-                "The borrow request for {$request['apparatus_name']} submitted by {$request['full_name']} has been approved.",
-                'success',
-                $request_id,
-                'borrow_request'
-            );
-
-            // Send email to other faculty if enabled
-            if (in_array('faculty', $email_recipients) && !empty($faculty['email'])) {
-                $email_message = "
-                    <p>Dear {$faculty['full_name']},</p>
-                    <p>A borrow request for <strong>{$request['apparatus_name']}</strong> submitted by {$request['full_name']} has been approved.</p>
-                    <p>Thank you,<br>CSM Laboratory Staff</p>
-                ";
-                send_email_notification($faculty['email'], $faculty['full_name'], 'Borrow Request Approved', $email_message);
-            }
-        }
-
-        // Notify admin/assistant
-        $admins = mysqli_query($conn, "SELECT user_id, full_name, email FROM users WHERE role IN ('admin', 'assistant')");
-        while ($admin = mysqli_fetch_assoc($admins)) {
-            create_notification(
-                $admin['user_id'],
-                'Request Approved',
-                "The borrow request for {$request['apparatus_name']} submitted by {$request['full_name']} has been approved.",
-                'success',
-                $request_id,
-                'borrow_request'
-            );
-
-            // Send email to admin if enabled
-            if (in_array('admin', $email_recipients) && !empty($admin['email'])) {
-                $email_message = "
-                    <p>Dear {$admin['full_name']},</p>
-                    <p>The borrow request for <strong>{$request['apparatus_name']}</strong> submitted by {$request['full_name']} has been approved.</p>
-                    <p>Thank you,<br>CSM Laboratory Staff</p>
-                ";
-                send_email_notification($admin['email'], $admin['full_name'], 'Borrow Request Approved', $email_message);
-            }
-        }
-    }
-}
-
-// Generate notification on request denial
-function notify_request_denied($request_id, $email_recipients = ['student', 'faculty', 'admin']) {
-    global $conn;
-
-    $request = mysqli_fetch_assoc(mysqli_query($conn, "
-        SELECT br.*, u.full_name, u.email, f.full_name as faculty_name, f.email as faculty_email, a.name as apparatus_name
-        FROM borrow_requests br
-        JOIN users u ON br.student_id = u.user_id
-        LEFT JOIN users f ON br.faculty_id = f.user_id
-        JOIN apparatus a ON br.apparatus_id = a.apparatus_id
-        WHERE br.request_id = $request_id
-    "));
-
-    if ($request) {
-        // Notify student
-        create_notification(
-            $request['student_id'],
-            'Request Denied',
-            "Your borrow request for {$request['apparatus_name']} has been denied. Please visit the admin office for clarification.",
-            'danger',
-            $request_id,
-            'borrow_request'
-        );
-
-        // Send email to student if enabled
-        if (in_array('student', $email_recipients) && !empty($request['email'])) {
-            $email_message = "
-                <p>Dear {$request['full_name']},</p>
-                <p>We regret to inform you that your borrow request for <strong>{$request['apparatus_name']}</strong> has been <strong>denied</strong>.</p>
-                <p>Please visit the laboratory administration office for more details and clarification regarding your request.</p>
-                <p>If you have any questions, please don't hesitate to contact us.</p>
-                <p>Thank you,<br>CSM Laboratory Staff</p>
-            ";
-            send_email_notification($request['email'], $request['full_name'], 'Borrow Request Denied', $email_message);
-        }
-
-        // Notify faculty if assigned
-        if ($request['faculty_id']) {
-            create_notification(
-                $request['faculty_id'],
-                'Request Denied',
-                "The borrow request for {$request['apparatus_name']} submitted by {$request['full_name']} has been denied.",
-                'danger',
-                $request_id,
-                'borrow_request'
-            );
-
-            // Send email to faculty if enabled
-            if (in_array('faculty', $email_recipients) && !empty($request['faculty_email'])) {
-                $email_message = "
-                    <p>Dear {$request['faculty_name']},</p>
-                    <p>The borrow request for <strong>{$request['apparatus_name']}</strong> submitted by {$request['full_name']} has been denied.</p>
-                    <p>Thank you,<br>CSM Laboratory Staff</p>
-                ";
-                send_email_notification($request['faculty_email'], $request['faculty_name'], 'Borrow Request Denied', $email_message);
-            }
-        }
-
-        // Notify all faculty (excluding assigned faculty to avoid duplicate)
-        $exclude_id = $request['faculty_id'] ? $request['faculty_id'] : 0;
-        $faculties = mysqli_query($conn, "SELECT user_id, full_name, email FROM users WHERE role = 'faculty' AND user_id != $exclude_id");
-        while ($faculty = mysqli_fetch_assoc($faculties)) {
-            create_notification(
-                $faculty['user_id'],
-                'Request Denied',
-                "The borrow request for {$request['apparatus_name']} submitted by {$request['full_name']} has been denied.",
-                'danger',
-                $request_id,
-                'borrow_request'
-            );
-
-            // Send email to other faculty if enabled
-            if (in_array('faculty', $email_recipients) && !empty($faculty['email'])) {
-                $email_message = "
-                    <p>Dear {$faculty['full_name']},</p>
-                    <p>A borrow request for <strong>{$request['apparatus_name']}</strong> submitted by {$request['full_name']} has been denied.</p>
-                    <p>Thank you,<br>CSM Laboratory Staff</p>
-                ";
-                send_email_notification($faculty['email'], $faculty['full_name'], 'Borrow Request Denied', $email_message);
-            }
-        }
-
-        // Notify admin/assistant
-        $admins = mysqli_query($conn, "SELECT user_id, full_name, email FROM users WHERE role IN ('admin', 'assistant')");
-        while ($admin = mysqli_fetch_assoc($admins)) {
-            create_notification(
-                $admin['user_id'],
-                'Request Denied',
-                "The borrow request for {$request['apparatus_name']} submitted by {$request['full_name']} has been denied.",
-                'danger',
-                $request_id,
-                'borrow_request'
-            );
-
-            // Send email to admin if enabled
-            if (in_array('admin', $email_recipients) && !empty($admin['email'])) {
-                $email_message = "
-                    <p>Dear {$admin['full_name']},</p>
-                    <p>The borrow request for <strong>{$request['apparatus_name']}</strong> submitted by {$request['full_name']} has been denied.</p>
-                    <p>Thank you,<br>CSM Laboratory Staff</p>
-                ";
-                send_email_notification($admin['email'], $admin['full_name'], 'Borrow Request Denied', $email_message);
-            }
-        }
-    }
-}
-
-// Generate notification on apparatus return
-function notify_apparatus_returned($request_id, $email_recipients = ['student']) {
-    global $conn;
-
+    
+    $request_id = intval($request_id);
+    
     $request = mysqli_fetch_assoc(mysqli_query($conn, "
         SELECT br.*, u.full_name, u.email, a.name as apparatus_name
         FROM borrow_requests br
@@ -488,38 +232,87 @@ function notify_apparatus_returned($request_id, $email_recipients = ['student'])
         JOIN apparatus a ON br.apparatus_id = a.apparatus_id
         WHERE br.request_id = $request_id
     "));
-
+    
     if ($request) {
-        // Notify student
+        $message = "Your request for <strong>{$request['apparatus_name']}</strong> (Qty: {$request['quantity']}) has been <span style='color: #16A34A; font-weight: bold;'>APPROVED</span>.<br><br>Please proceed to the laboratory at your scheduled time with your student ID.";
+        
         create_notification(
             $request['student_id'],
-            'Return Confirmed',
-            "You have successfully returned the borrowed {$request['apparatus_name']}. Thank you for using our service.",
+            'Request Approved ✓',
+            strip_tags($message),
             'success',
             $request_id,
             'borrow_request'
         );
-
-        // Send email to student if enabled
-        if (in_array('student', $email_recipients) && !empty($request['email'])) {
-            $email_message = "
-                <p>Dear {$request['full_name']},</p>
-                <p>Your borrowed apparatus (<strong>{$request['apparatus_name']}</strong>) has been successfully returned.</p>
-                <p>Thank you for returning the items on time and in good condition. We appreciate your cooperation in maintaining our laboratory resources.</p>
-                <p>If you need to borrow apparatus again in the future, please don't hesitate to submit a new request.</p>
-                <p>Thank you,<br>CSM Laboratory Staff</p>
-            ";
-            send_email_notification($request['email'], $request['full_name'], 'Apparatus Return Confirmed', $email_message);
-        }
     }
 }
 
-// Generate notification for penalty
-function notify_penalty_issued($penalty_id, $email_recipients = ['student']) {
+/**
+ * Generate notification on request denial
+ */
+function notify_request_denied($request_id) {
     global $conn;
+    
+    $request_id = intval($request_id);
+    
+    $request = mysqli_fetch_assoc(mysqli_query($conn, "
+        SELECT br.*, u.full_name, u.email, a.name as apparatus_name
+        FROM borrow_requests br
+        JOIN users u ON br.student_id = u.user_id
+        JOIN apparatus a ON br.apparatus_id = a.apparatus_id
+        WHERE br.request_id = $request_id
+    "));
+    
+    if ($request) {
+        create_notification(
+            $request['student_id'],
+            'Request Rejected',
+            "Your request for {$request['apparatus_name']} has been rejected. Please contact the laboratory office for clarification.",
+            'danger',
+            $request_id,
+            'borrow_request'
+        );
+    }
+}
 
+/**
+ * Generate notification on apparatus return
+ */
+function notify_apparatus_returned($request_id) {
+    global $conn;
+    
+    $request_id = intval($request_id);
+    
+    $request = mysqli_fetch_assoc(mysqli_query($conn, "
+        SELECT br.*, u.full_name, u.email, a.name as apparatus_name
+        FROM borrow_requests br
+        JOIN users u ON br.student_id = u.user_id
+        JOIN apparatus a ON br.apparatus_id = a.apparatus_id
+        WHERE br.request_id = $request_id
+    "));
+    
+    if ($request) {
+        create_notification(
+            $request['student_id'],
+            'Return Confirmed',
+            "Your borrowed {$request['apparatus_name']} has been successfully returned. Thank you!",
+            'success',
+            $request_id,
+            'borrow_request'
+        );
+    }
+}
+
+/**
+ * Generate notification for penalty
+ */
+function notify_penalty_issued($penalty_id) {
+    global $conn;
+    
+    $penalty_id = intval($penalty_id);
+    
     $penalty = mysqli_fetch_assoc(mysqli_query($conn, "
-        SELECT p.*, t.request_id, br.student_id, u.full_name, u.email, a.name as apparatus_name
+        SELECT p.*, t.request_id, br.student_id, u.full_name, a.name as apparatus_name
         FROM penalties p
         JOIN transactions t ON p.transaction_id = t.transaction_id
         JOIN borrow_requests br ON t.request_id = br.request_id
@@ -527,164 +320,107 @@ function notify_penalty_issued($penalty_id, $email_recipients = ['student']) {
         JOIN apparatus a ON br.apparatus_id = a.apparatus_id
         WHERE p.penalty_id = $penalty_id
     "));
-
+    
     if ($penalty) {
-        // Notify student
         create_notification(
             $penalty['student_id'],
             'Penalty Issued',
-            "A penalty of ₱{$penalty['amount']} has been issued for your recent transaction. Reason: {$penalty['reason']}",
+            "A penalty of ₱{$penalty['amount']} has been issued. Reason: {$penalty['reason']}",
             'warning',
             $penalty_id,
             'penalty'
         );
-
-        // Send email to student if enabled
-        if (in_array('student', $email_recipients) && !empty($penalty['email'])) {
-            $email_message = "
-                <p>Dear {$penalty['full_name']},</p>
-                <p>A penalty has been issued for your recent apparatus borrowing transaction.</p>
-                <p><strong>Penalty Details:</strong></p>
-                <ul>
-                    <li>Amount: ₱{$penalty['amount']}</li>
-                    <li>Reason: {$penalty['reason']}</li>
-                    <li>Date Issued: " . date('M d, Y') . "</li>
-                    <li>Apparatus: {$penalty['apparatus_name']}</li>
-                </ul>
-                <p>Please settle this penalty as soon as possible. Contact the laboratory administration for payment instructions.</p>
-                <p>Thank you,<br>CSM Laboratory Staff</p>
-            ";
-            send_email_notification($penalty['email'], $penalty['full_name'], 'Penalty Notice', $email_message);
-        }
     }
 }
 
-// Generate due date reminders
-function send_due_date_reminders($email_recipients = ['student']) {
+/**
+ * Send due date reminders
+ */
+function send_due_date_reminders() {
     global $conn;
-
-    // Get items due in 24 hours
+    
     $tomorrow = date('Y-m-d', strtotime('+1 day'));
     $due_items = mysqli_query($conn, "
-        SELECT br.*, u.full_name, u.email, a.name as apparatus_name
+        SELECT br.request_id, br.student_id, br.date_needed, u.full_name, a.name as apparatus_name
         FROM borrow_requests br
         JOIN users u ON br.student_id = u.user_id
         JOIN apparatus a ON br.apparatus_id = a.apparatus_id
         WHERE br.status IN ('approved', 'released')
         AND br.date_needed = '$tomorrow'
     ");
-
+    
     while ($item = mysqli_fetch_assoc($due_items)) {
-        // Notify student
         create_notification(
             $item['student_id'],
             'Due Date Reminder',
-            "Your borrowed {$item['apparatus_name']} is due tomorrow. Please make arrangements to return it on time.",
+            "Your borrowed {$item['apparatus_name']} is due tomorrow. Please return on time.",
             'warning',
             $item['request_id'],
             'borrow_request'
         );
-
-        // Send email to student if enabled
-        if (in_array('student', $email_recipients) && !empty($item['email'])) {
-            $email_message = "
-                <p>Dear {$item['full_name']},</p>
-                <p>This is a reminder that your borrowed apparatus is due for return tomorrow.</p>
-                <p><strong>Details:</strong></p>
-                <ul>
-                    <li>Apparatus: {$item['apparatus_name']}</li>
-                    <li>Due Date: " . date('M d, Y', strtotime($item['date_needed'])) . "</li>
-                    <li>Time: {$item['time_from']} - {$item['time_to']}</li>
-                </ul>
-                <p>Please return the items to avoid penalties. Thank you for your attention to this matter.</p>
-                <p>Thank you,<br>CSM Laboratory Staff</p>
-            ";
-            send_email_notification($item['email'], $item['full_name'], 'Due Date Reminder', $email_message);
-        }
     }
-
-    // Get overdue items
+    
+    // Overdue items
     $today = date('Y-m-d');
     $overdue_items = mysqli_query($conn, "
-        SELECT br.*, u.full_name, u.email, a.name as apparatus_name
+        SELECT br.request_id, br.student_id, br.date_needed, u.full_name, a.name as apparatus_name,
+               DATEDIFF('$today', br.date_needed) as days_overdue
         FROM borrow_requests br
         JOIN users u ON br.student_id = u.user_id
         JOIN apparatus a ON br.apparatus_id = a.apparatus_id
         WHERE br.status IN ('approved', 'released')
         AND br.date_needed < '$today'
     ");
-
+    
     while ($item = mysqli_fetch_assoc($overdue_items)) {
-        // Notify student
         create_notification(
             $item['student_id'],
-            'Overdue Notice',
-            "Your borrowed {$item['apparatus_name']} is now overdue. Please return it immediately to avoid additional penalties.",
+            'OVERDUE NOTICE',
+            "Your {$item['apparatus_name']} is {$item['days_overdue']} day(s) overdue. Please return immediately to avoid penalties.",
             'danger',
             $item['request_id'],
             'borrow_request'
         );
-
-        // Send email to student if enabled
-        if (in_array('student', $email_recipients) && !empty($item['email'])) {
-            $days_overdue = floor((strtotime($today) - strtotime($item['date_needed'])) / (60*60*24));
-            $email_message = "
-                <p>Dear {$item['full_name']},</p>
-                <p><strong>URGENT: Your borrowed apparatus is now OVERDUE.</strong></p>
-                <p><strong>Details:</strong></p>
-                <ul>
-                    <li>Apparatus: {$item['apparatus_name']}</li>
-                    <li>Due Date: " . date('M d, Y', strtotime($item['date_needed'])) . "</li>
-                    <li>Days Overdue: $days_overdue</li>
-                </ul>
-                <p>Please return the items immediately to the laboratory to avoid additional penalties. Contact us if you need assistance.</p>
-                <p>Thank you,<br>CSM Laboratory Staff</p>
-            ";
-            send_email_notification($item['email'], $item['full_name'], 'OVERDUE NOTICE', $email_message);
-        }
     }
 }
 
-// Send custom email to selected users
-function send_custom_email($user_ids, $subject, $message, $send_to_all = false) {
+/**
+ * Send custom email to selected users
+ */
+function send_custom_email_to_users($user_ids, $subject, $message) {
     global $conn;
-
-    if ($send_to_all) {
-        // Send to all users
-        $users = mysqli_query($conn, "SELECT user_id, full_name, email FROM users WHERE email IS NOT NULL AND email != ''");
-    } else {
-        // Send to specific users
-        $ids = implode(',', array_map('intval', $user_ids));
-        $users = mysqli_query($conn, "SELECT user_id, full_name, email FROM users WHERE user_id IN ($ids) AND email IS NOT NULL AND email != ''");
-    }
-
+    
+    $ids = implode(',', array_map('intval', $user_ids));
+    $users = mysqli_query($conn, "SELECT user_id, full_name, email FROM users WHERE user_id IN ($ids) AND email IS NOT NULL");
+    
     $sent_count = 0;
     while ($user = mysqli_fetch_assoc($users)) {
         if (send_email_notification($user['email'], $user['full_name'], $subject, $message)) {
             $sent_count++;
         }
     }
-
+    
     return $sent_count;
 }
 
-// Send custom email to users by role
+/**
+ * Send custom email to users by role
+ */
 function send_custom_email_by_role($roles, $subject, $message) {
     global $conn;
-
+    
     $role_list = "'" . implode("','", array_map(function($role) use ($conn) {
         return mysqli_real_escape_string($conn, $role);
     }, $roles)) . "'";
-
-    $users = mysqli_query($conn, "SELECT user_id, full_name, email FROM users WHERE role IN ($role_list) AND email IS NOT NULL AND email != ''");
-
+    
+    $users = mysqli_query($conn, "SELECT user_id, full_name, email FROM users WHERE role IN ($role_list) AND email IS NOT NULL");
+    
     $sent_count = 0;
     while ($user = mysqli_fetch_assoc($users)) {
         if (send_email_notification($user['email'], $user['full_name'], $subject, $message)) {
             $sent_count++;
         }
     }
-
+    
     return $sent_count;
 }
-?>
